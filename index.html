@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="am">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Stars Shop</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root{
+    --bg: var(--tg-theme-bg-color, #ffffff);
+    --bg2: var(--tg-theme-secondary-bg-color, #f1f3f6);
+    --text: var(--tg-theme-text-color, #111111);
+    --hint: var(--tg-theme-hint-color, #7d8590);
+    --btn: var(--tg-theme-button-color, #2481cc);
+    --btntext: var(--tg-theme-button-text-color, #ffffff);
+    --ok:#1fa75a; --warn:#e69b00; --bad:#d93d3d;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:var(--bg2);color:var(--text);font:15px/1.4 -apple-system,Segoe UI,Roboto,sans-serif;padding-bottom:90px}
+  header{background:var(--bg);padding:16px 16px 12px;display:flex;align-items:center;justify-content:space-between}
+  header h1{margin:0;font-size:20px}
+  .sub{color:var(--hint);font-size:13px;margin-top:2px}
+  .lang{border:1px solid var(--hint);background:none;color:var(--text);border-radius:8px;padding:4px 10px;font-size:13px}
+  .tabs{display:flex;background:var(--bg);padding:0 12px 10px;gap:8px}
+  .tab{flex:1;padding:9px;border:0;border-radius:10px;background:var(--bg2);color:var(--text);font-size:14px;font-weight:600}
+  .tab.on{background:var(--btn);color:var(--btntext)}
+  .card{background:var(--bg);margin:12px;border-radius:14px;padding:14px}
+  .card h3{margin:0 0 10px;font-size:15px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .pkg{border:2px solid transparent;background:var(--bg2);border-radius:12px;padding:12px;text-align:left;color:var(--text)}
+  .pkg.on{border-color:var(--btn)}
+  .pkg b{font-size:18px;display:block}
+  .pkg span{color:var(--hint);font-size:13px}
+  input{width:100%;padding:12px;border-radius:10px;border:1px solid var(--bg2);background:var(--bg2);color:var(--text);font-size:16px;outline:none}
+  input:focus{border-color:var(--btn)}
+  .row{display:flex;gap:8px;margin-top:10px}
+  .ghost{border:1px solid var(--btn);color:var(--btn);background:none;border-radius:10px;padding:8px 12px;font-size:14px}
+  .sum{display:flex;justify-content:space-between;margin:6px 0}
+  .sum b{font-size:17px}
+  .main{position:fixed;left:12px;right:12px;bottom:14px;padding:15px;border:0;border-radius:14px;background:var(--btn);color:var(--btntext);font-size:16px;font-weight:700}
+  .main:disabled{opacity:.5}
+  .chip{display:inline-block;padding:2px 9px;border-radius:99px;font-size:12px;font-weight:700;color:#fff}
+  .s-pending{background:var(--warn)} .s-paid,.s-delivering{background:var(--btn)} .s-delivered{background:var(--ok)}
+  .s-failed,.s-expired{background:var(--bad)} .s-check_needed{background:var(--warn)}
+  .order{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--bg2)}
+  .order:last-child{border:0}
+  .err{color:var(--bad);font-size:13px;margin-top:8px;min-height:16px}
+  .hidden{display:none}
+  .status{text-align:center;padding:8px 0}
+  .status .big{font-size:42px}
+  .status p{margin:6px 0}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>⭐ Stars Shop</h1>
+    <div class="sub" id="sub"></div>
+  </div>
+  <button class="lang" id="langBtn"></button>
+</header>
+<div class="tabs">
+  <button class="tab on" id="tabBuy"></button>
+  <button class="tab" id="tabOrders"></button>
+</div>
+
+<!-- BUY -->
+<section id="viewBuy">
+  <div class="card">
+    <h3 id="tPick"></h3>
+    <div class="grid" id="pkgs"></div>
+    <div class="row"><input id="custom" type="number" inputmode="numeric"></div>
+  </div>
+  <div class="card">
+    <h3 id="tTo"></h3>
+    <input id="uname" placeholder="@username" autocapitalize="off" autocomplete="off">
+    <div class="row"><button class="ghost" id="meBtn"></button></div>
+  </div>
+  <div class="card">
+    <div class="sum"><span id="lStars"></span><b id="vStars">—</b></div>
+    <div class="sum"><span id="lTotal"></span><b id="vTotal">—</b></div>
+    <div class="err" id="err"></div>
+  </div>
+  <button class="main" id="payBtn"></button>
+</section>
+
+<!-- STATUS -->
+<section id="viewStatus" class="hidden">
+  <div class="card status">
+    <div class="big" id="stIcon">⏳</div>
+    <h3 id="stTitle"></h3>
+    <p id="stText" class="sub"></p>
+  </div>
+  <button class="main" id="stBtn"></button>
+</section>
+
+<!-- ORDERS -->
+<section id="viewOrders" class="hidden">
+  <div class="card" id="ordersBox"></div>
+</section>
+
+<script>
+const tg = window.Telegram && window.Telegram.WebApp;
+if (tg) { tg.ready(); tg.expand(); }
+const $ = (id) => document.getElementById(id);
+
+// ------------------------------------------------------------ i18n ----
+const T = {
+  am: {
+    sub: 'ክፍያው እንደደረሰ Stars ራሱ ይላካል', buy: 'ግዛ', orders: 'ትዕዛዞቼ',
+    pick: 'የStars መጠን ይምረጡ', custom: 'ሌላ መጠን (ቢያንስ {min})', to: 'Stars የሚደርሰው',
+    me: 'ለራሴ', stars: 'Stars', total: 'ጠቅላላ', pay: 'ክፈል (USDT)',
+    badAmount: 'መጠኑ በ{min} እና {max} መካከል መሆን አለበት', badUser: 'ትክክለኛ @username ያስገቡ',
+    tooMany: 'ብዙ ያልተከፈሉ ትዕዛዞች አሉ፤ ትንሽ ይቆዩ', fail: 'ችግር ተፈጥሯል፤ ደግሞ ይሞክሩ',
+    noOrders: 'ምንም ትዕዛዝ የለም', back: 'ተመለስ', payNow: 'ወደ ክፍያ ሂድ', check: 'ክፍያ አረጋግጥ',
+    s_pending: 'ክፍያ በመጠበቅ ላይ', s_paid: 'ክፍያ ደርሷል', s_delivering: 'Stars በመላክ ላይ', s_delivered: 'ተልኳል ✅',
+    s_failed: 'አልተሳካም', s_expired: 'ጊዜው አልፏል', s_check_needed: 'በማረጋገጥ ላይ',
+    t_pending: 'ከታች ባለው ቁልፍ USDT ይክፈሉ። ክፍያው ሲደርስ ይህ ገጽ ራሱ ይቀየራል።',
+    t_paid: 'ክፍያዎ ተረጋግጧል።', t_delivering: 'Stars ወደ @{u} በመላክ ላይ ነው… እባክዎ ይጠብቁ (እስከ 5 ደቂቃ)።',
+    t_delivered: '{s} Stars ወደ @{u} ተልኳል። እናመሰግናለን!',
+    t_failed: 'ትዕዛዙ አልተሳካም። ክፍያው ከተከፈለ ወደ @CryptoBot ዋሌትዎ ይመለሳል።',
+    t_expired: 'የክፍያ ጊዜው አልፏል። አዲስ ትዕዛዝ ይፍጠሩ።',
+    t_check_needed: 'ሁኔታው በመረጋገጥ ላይ ነው። ድጋሚ አይክፈሉ፤ ትዕዛዝ #{id} ይያዙ።',
+  },
+  en: {
+    sub: 'Stars are sent automatically after payment', buy: 'Buy', orders: 'My orders',
+    pick: 'Choose Stars amount', custom: 'Custom amount (min {min})', to: 'Send Stars to',
+    me: 'Myself', stars: 'Stars', total: 'Total', pay: 'Pay (USDT)',
+    badAmount: 'Amount must be between {min} and {max}', badUser: 'Enter a valid @username',
+    tooMany: 'Too many unpaid orders, please wait', fail: 'Something went wrong, try again',
+    noOrders: 'No orders yet', back: 'Back', payNow: 'Go to payment', check: 'Check payment',
+    s_pending: 'Awaiting payment', s_paid: 'Paid', s_delivering: 'Sending Stars', s_delivered: 'Delivered ✅',
+    s_failed: 'Failed', s_expired: 'Expired', s_check_needed: 'Verifying',
+    t_pending: 'Pay with USDT using the button below. This page updates automatically.',
+    t_paid: 'Payment confirmed.', t_delivering: 'Sending Stars to @{u}… please wait (up to 5 min).',
+    t_delivered: '{s} Stars were sent to @{u}. Thank you!',
+    t_failed: 'The order failed. If you paid, it is refunded to your @CryptoBot wallet.',
+    t_expired: 'The invoice expired. Please create a new order.',
+    t_check_needed: 'Status is being verified. Do not pay again; keep order #{id}.',
+  },
+};
+let lang = localStorage.getItem('lang') || 'am';
+const t = (k, v = {}) => (T[lang][k] || k).replace(/\{(\w+)\}/g, (_, n) => v[n] ?? '');
+
+// ------------------------------------------------------------ api -----
+async function api(path, opts = {}) {
+  const r = await fetch(path, {
+    method: opts.method || 'GET',
+    headers: { 'Content-Type': 'application/json', 'x-init-data': tg ? tg.initData : '' },
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw Object.assign(new Error(d.error || 'error'), { code: d.error });
+  return d;
+}
+
+// ------------------------------------------------------------ state ---
+let cfg = { price: 0.02, min: 50, max: 5000, packages: [] };
+let stars = 0;
+let current = null; // order being watched
+let timer = null;
+const usd = (s) => (Math.round(s * cfg.price * 100) / 100).toFixed(2);
+
+function renderStatic() {
+  $('sub').textContent = t('sub');
+  $('langBtn').textContent = lang === 'am' ? 'EN' : 'አማ';
+  $('tabBuy').textContent = t('buy'); $('tabOrders').textContent = t('orders');
+  $('tPick').textContent = t('pick'); $('tTo').textContent = t('to');
+  $('custom').placeholder = t('custom', { min: cfg.min });
+  $('meBtn').textContent = t('me'); $('lStars').textContent = t('stars'); $('lTotal').textContent = t('total');
+  $('payBtn').textContent = t('pay');
+  renderPkgs(); renderSummary();
+  if (current) renderStatus();
+}
+
+function renderPkgs() {
+  $('pkgs').innerHTML = '';
+  cfg.packages.forEach((p) => {
+    const b = document.createElement('button');
+    b.className = 'pkg' + (stars === p.stars ? ' on' : '');
+    b.innerHTML = `<b>⭐ ${p.stars}</b><span>$${p.usd.toFixed(2)}</span>`;
+    b.onclick = () => { stars = p.stars; $('custom').value = ''; renderPkgs(); renderSummary(); };
+    $('pkgs').appendChild(b);
+  });
+}
+
+function renderSummary() {
+  $('vStars').textContent = stars ? stars : '—';
+  $('vTotal').textContent = stars ? `$${usd(stars)}` : '—';
+}
+
+$('custom').oninput = (e) => {
+  stars = parseInt(e.target.value, 10) || 0;
+  renderPkgs(); renderSummary();
+};
+$('meBtn').onclick = () => {
+  const u = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
+  if (u && u.username) $('uname').value = '@' + u.username;
+};
+$('langBtn').onclick = () => { lang = lang === 'am' ? 'en' : 'am'; localStorage.setItem('lang', lang); renderStatic(); if (!$('viewOrders').classList.contains('hidden')) loadOrders(); };
+
+function show(view) {
+  ['viewBuy', 'viewStatus', 'viewOrders'].forEach((v) => $(v).classList.toggle('hidden', v !== view));
+  $('tabBuy').classList.toggle('on', view === 'viewBuy' || view === 'viewStatus');
+  $('tabOrders').classList.toggle('on', view === 'viewOrders');
+}
+$('tabBuy').onclick = () => show(current && !isFinal(current.status) ? 'viewStatus' : 'viewBuy');
+$('tabOrders').onclick = () => { show('viewOrders'); loadOrders(); };
+
+// ------------------------------------------------------------ buy -----
+$('payBtn').onclick = async () => {
+  $('err').textContent = '';
+  if (!stars || stars < cfg.min || stars > cfg.max) return ($('err').textContent = t('badAmount', { min: cfg.min, max: cfg.max }));
+  const uname = $('uname').value.trim();
+  if (!/^@?[A-Za-z][A-Za-z0-9_]{4,31}$/.test(uname)) return ($('err').textContent = t('badUser'));
+  $('payBtn').disabled = true;
+  try {
+    current = await api('/api/order', { method: 'POST', body: { stars, username: uname } });
+    show('viewStatus'); renderStatus(); openPay(); startWatch();
+  } catch (e) {
+    $('err').textContent = e.code === 'bad_amount' ? t('badAmount', { min: cfg.min, max: cfg.max })
+      : e.code === 'bad_username' ? t('badUser') : e.code === 'too_many_pending' ? t('tooMany') : t('fail');
+  } finally { $('payBtn').disabled = false; }
+};
+
+function openPay() {
+  if (!current || !current.pay_url) return;
+  const u = current.pay_url;
+  if (tg && /^https:\/\/t\.me\//.test(u)) tg.openTelegramLink(u);
+  else if (tg) tg.openLink(u);
+  else window.open(u, '_blank');
+}
+
+// ------------------------------------------------------------ status --
+const isFinal = (s) => ['delivered', 'failed', 'expired', 'check_needed'].includes(s);
+const ICON = { pending: '⏳', paid: '✅', delivering: '🚀', delivered: '🎉', failed: '❌', expired: '⌛', check_needed: '⚠️' };
+
+function renderStatus() {
+  if (!current) return;
+  const s = current.status;
+  $('stIcon').textContent = ICON[s] || '⏳';
+  $('stTitle').textContent = `#${current.id} — ${t('s_' + s)}`;
+  $('stText').textContent = t('t_' + s, { u: current.username, s: current.stars, id: current.id });
+  const btn = $('stBtn');
+  if (s === 'pending') { btn.textContent = t('payNow'); btn.onclick = openPay; }
+  else if (isFinal(s)) { btn.textContent = t('back'); btn.onclick = () => { current = null; stars = 0; $('custom').value = ''; renderPkgs(); renderSummary(); show('viewBuy'); }; }
+  else { btn.textContent = t('check'); btn.onclick = poll; }
+}
+
+async function poll() {
+  if (!current) return;
+  try { current = await api('/api/orders/' + current.id); renderStatus(); if (isFinal(current.status)) stopWatch(); } catch (e) { /* ignore */ }
+}
+function startWatch() { stopWatch(); timer = setInterval(poll, 4000); }
+function stopWatch() { if (timer) clearInterval(timer); timer = null; }
+
+// ------------------------------------------------------------ orders --
+async function loadOrders() {
+  try {
+    const list = await api('/api/orders');
+    $('ordersBox').innerHTML = list.length
+      ? list.map((o) => `<div class="order"><div><b>#${o.id}</b> ⭐ ${o.stars} → @${o.username}<div class="sub">$${o.usd.toFixed(2)}</div></div><span class="chip s-${o.status}">${t('s_' + o.status)}</span></div>`).join('')
+      : `<div class="sub">${t('noOrders')}</div>`;
+  } catch (e) { $('ordersBox').textContent = t('fail'); }
+}
+
+// ------------------------------------------------------------ init ----
+(async () => {
+  renderStatic();
+  try { cfg = await api('/api/config'); } catch (e) { $('err').textContent = t('fail'); }
+  renderStatic();
+})();
+</script>
+</body>
+  </html>
+  
